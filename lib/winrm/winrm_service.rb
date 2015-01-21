@@ -315,12 +315,15 @@ module WinRM
     # Run a Powershell script that resides on the local box.
     # @param [IO,String] script_file an IO reference for reading the Powershell script or the actual file contents
     # @param [String] an existing and open shell id to reuse
+    # @param [Hash<optional>] opts additional options you can pass
+    # @option opts [String] :use_32bit whether the 32bit powershell console should be used (default: false)
     # @return [Hash] :stdout and :stderr
-    def run_powershell_script(script_file, &block)
+    def run_powershell_script(script_file, opts={}, &block)
       # if an IO object is passed read it..otherwise assume the contents of the file were passed
       script_text = script_file.kind_of?(IO) ? script_file.read : script_file
       script = WinRM::PowershellScript.new(script_text)
-      run_cmd("powershell -encodedCommand #{script.encoded()}", &block)
+      powershell_binary = opts[:use_32bit] ? 'C:\\Windows\\syswow64\\WindowsPowerShell\\v1.0\\powershell.exe' : 'powershell'
+      run_cmd("#{powershell_binary} -encodedCommand #{script.encoded()}", &block)
     end
     alias :powershell :run_powershell_script
 

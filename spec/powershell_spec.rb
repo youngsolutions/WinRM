@@ -99,4 +99,18 @@ describe 'winrm client powershell', integration: true do
     it { should have_exit_code 0 }
     it { should have_stdout_match(/1234-äöü/) }
   end
+
+  # default
+  describe 'use 64bit powershell console' do
+    subject(:output) { @winrm.powershell('[IntPtr]::size') }
+    it { should have_exit_code 0 }
+    it { should have_stdout_match(/8/) }
+  end
+
+  describe 'use 32bit powershell console' do
+    subject(:output) { @winrm.powershell('[IntPtr]::size', :use_32bit => true) }
+    it { should have_exit_code 0 }
+    it { should have_stdout_match(/4/) }
+  end
+
 end
