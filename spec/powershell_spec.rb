@@ -93,4 +93,10 @@ describe 'winrm client powershell', integration: true do
         "<S S=\"Error\">, world!_x000D__x000A_</S></Objs>")
     end
   end
+
+  describe 'non-ascii encoding' do
+    subject(:output) { @winrm.powershell('echo "1234-äöü"') }
+    it { should have_exit_code 0 }
+    it { should have_stdout_match(/1234-äöü/) }
+  end
 end
