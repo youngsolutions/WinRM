@@ -147,4 +147,11 @@ describe 'winrm client powershell', integration: true do
     subject(:output) { @winrm.copy_and_run_powershell_script('echo "Hello World') }
     it { should have_exit_code 1 }
   end
+
+  describe 'handle problems with whitespaces in script' do
+    cmd = "       \r\n                         \r\n    echo \"Hello\"\r\n"
+    subject(:output) { @winrm.copy_and_run_powershell_script(cmd) }
+    it { should have_exit_code 0 }
+    it { should have_stdout_match /Hello/ }
+  end
 end

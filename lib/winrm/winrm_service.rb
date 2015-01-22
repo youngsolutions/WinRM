@@ -366,14 +366,14 @@ module WinRM
         chunks = script.scan(/.{1,#{chunk_size}}/m) # http://stackoverflow.com/a/754442
         @logger.debug("Copying script (#{script.length} chars) in #{chunks} chunks")
         chunks.each do |chunk|
-          write_chuck_command = <<-eos.gsub(/^          /, '')
-          $sw = new-object system.IO.StreamWriter("#{remote_temp_file}", $true, [System.Text.Encoding]::Default)
-          $cmd = @'
-          #{chunk}
-          '@
-          $sw.write($cmd)
-          $sw.close()
-          eos
+          write_chuck_command = <<-eos
+$sw = new-object system.IO.StreamWriter("#{remote_temp_file}", $true, [System.Text.Encoding]::Default)
+$cmd = @'
+#{chunk}
+'@
+$sw.write($cmd)
+$sw.close()
+eos
           output = run_powershell_script(write_chuck_command)
           raise "Error while copying file to remote system: #{output.inspect}" unless output[:exitcode] == 0
         end
