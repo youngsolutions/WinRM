@@ -2,6 +2,13 @@
 [![Build Status](https://travis-ci.org/WinRb/WinRM.svg?branch=master)](https://travis-ci.org/WinRb/WinRM)
 [![Gem Version](https://badge.fury.io/rb/winrm.svg)](http://badge.fury.io/rb/winrm)
 
+## Fork
+This is a fork of [https://github.com/WinRb/WinRM](https://github.com/WinRb/WinRM):
+* Fixed encoding in stdout/stderr
+* Circumvent size limit (~3000 chars) for powershell scripts with a new command `copy_and_run_powershell_script`
+* Option to use 32 bit powershell
+* Powershell syntax errors return exit code 1 (instead of 0)
+
 This is a SOAP library that uses the functionality in Windows Remote
 Management(WinRM) to call native object in Windows.  This includes, but is
 not limitted to, running batch scripts, powershell scripts and fetching WMI
