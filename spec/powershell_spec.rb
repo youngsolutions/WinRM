@@ -142,4 +142,9 @@ describe 'winrm client powershell', integration: true do
     it { should have_stdout_match /Hello/ }
     it { should have_stderr_match /Goodbye/ }
   end
+
+  describe 'if a syntax error occurs, exit code is 1' do
+    subject(:output) { @winrm.copy_and_run_powershell_script('echo "Hello World') }
+    it { should have_exit_code 1 }
+  end
 end

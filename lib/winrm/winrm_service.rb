@@ -341,6 +341,8 @@ module WinRM
       powershell_binary = opts[:use_32bit] ? 'C:\\Windows\\syswow64\\WindowsPowerShell\\v1.0\\powershell.exe' : 'powershell'
       output = run_cmd("#{powershell_binary} #{command_line}", &block)
       [:stdout, :stderr].each{|stream| output[stream] = output[:data].collect{|chunk|chunk[stream]}.join} if opts[:join_output]
+      # set exit code to 1 if there is a syntax error (powershell does return exit code 0 if syntax error occurs)
+      output[:exitcode] = 1 if output[:data].any?{|chunk|chunk[:stderr].to_s.include? 'ParserError'}
       output
     end
 
