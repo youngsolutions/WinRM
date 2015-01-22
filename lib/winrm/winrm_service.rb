@@ -317,16 +317,90 @@ module WinRM
     # @param [String] an existing and open shell id to reuse
     # @param [Hash<optional>] opts additional options you can pass
     # @option opts [String] :use_32bit whether the 32bit powershell console should be used (default: false)
+    # @option opts [String] :join_output whether the returned output (stderr, stdout) should be joined (default: false)
     # @return [Hash] :stdout and :stderr
     def run_powershell_script(script_file, opts={}, &block)
       # if an IO object is passed read it..otherwise assume the contents of the file were passed
       script_text = script_file.kind_of?(IO) ? script_file.read : script_file
       script = WinRM::PowershellScript.new(script_text)
-      powershell_binary = opts[:use_32bit] ? 'C:\\Windows\\syswow64\\WindowsPowerShell\\v1.0\\powershell.exe' : 'powershell'
-      run_cmd("#{powershell_binary} -encodedCommand #{script.encoded()}", &block)
+      run_powershell("-encodedCommand #{script.encoded()}", opts)
     end
     alias :powershell :run_powershell_script
 
+    # Run a Powershell script that resides on the remote box.
+    # @param [String] remote_file_path path to the file on the remote box
+    # @param [Hash<optional>] opts additional options you can pass
+    # @option opts [String] :use_32bit whether the 32bit powershell console should be used (default: false)
+    # @option opts [String] :join_output whether the returned output (stderr, stdout) should be joined (default: false)
+    # @return [Hash] :stdout and :stderr
+    def run_powershell_remote_file(remote_file_path, opts={}, &block)
+      run_powershell("-File #{remote_file_path}", opts)
+    end
+
+    def run_powershell(command_line, opts, &block)
+      powershell_binary = opts[:use_32bit] ? 'C:\\Windows\\syswow64\\WindowsPowerShell\\v1.0\\powershell.exe' : 'powershell'
+      output = run_cmd("#{powershell_binary} #{command_line}", &block)
+      [:stdout, :stderr].each{|stream| output[stream] = output[:data].collect{|chunk|chunk[stream]}.join} if opts[:join_output]
+      output
+    end
+
+    # Copies a script to the windows host and executes it there (to circumvent length limit)
+    # @param [String] script the script (string) to be copied & executed remotely
+    # @param [Hash<optional>] opts additional options you can pass
+    # @option opts [String] :use_32bit whether the 32bit powershell console should be used (default: false)
+    def copy_and_run_powershell_script(script, opts={}, &block)
+      @logger.debug('Create temp file on remote system')
+      # create temp file (.tmp) and rename it to ps1, otherwise powershell refuses to start it
+      temp_file_cmd = "([System.IO.Path]::GetTempFileName() | Rename-Item -NewName { $_ -replace 'tmp$', 'ps1' } -PassThru).FullName"
+      output = run_powershell_script(temp_file_cmd, :join_output => true)
+      raise "Could not create temp file no remote system: #{output.inspect}" unless output[:exitcode] == 0
+
+      remote_temp_file = output[:stdout].strip
+      @logger.debug("Created temp file #{remote_temp_file} on remote system")
+
+      begin
+        # copy file in 2000 char chunks (since length limit applies here as well) to tempfile
+        chunk_size = 2000
+        chunks = script.scan(/.{1,#{chunk_size}}/m) # http://stackoverflow.com/a/754442
+        @logger.debug("Copying script (#{script.length} chars) in #{chunks} chunks")
+        chunks.each do |chunk|
+          write_chuck_command = <<-eos.gsub(/^          /, '')
+          $sw = new-object system.IO.StreamWriter("#{remote_temp_file}", $true, [System.Text.Encoding]::Default)
+          $cmd = @'
+          #{chunk}
+          '@
+          $sw.write($cmd)
+          $sw.close()
+          eos
+          output = run_powershell_script(write_chuck_command)
+          raise "Error while copying file to remote system: #{output.inspect}" unless output[:exitcode] == 0
+        end
+
+        # compare md5sum between local and remote script
+        local_md5 = Digest::MD5.hexdigest(script)
+        @logger.debug('Integrity check of remote file')
+
+        compare_md5_cmd = <<-eos
+        $originalMd5Sum = "#{local_md5}"
+        $md5 = new-object -TypeName System.Security.Cryptography.MD5CryptoServiceProvider
+        $remoteMd5Sum = [System.BitConverter]::ToString($md5.ComputeHash([System.IO.File]::ReadAllBytes("#{remote_temp_file}"))).Replace("-", "")
+        if(-not($originalMd5Sum -ieq $remoteMD5Sum)){
+          [Console]::Error.WriteLine("The local ($originalMd5Sum) and remote ($remoteMd5Sum) did not match.")
+          exit 1
+        }
+        exit 0
+        eos
+
+        output = run_powershell_script(compare_md5_cmd)
+        raise "Error while copying file to remote system: #{output.inspect}" unless output[:exitcode] == 0
+        @logger.debug("Integrity check successful, now running remote file #{remote_temp_file}")
+
+        run_powershell_remote_file(remote_temp_file, opts)
+      ensure
+        @logger.debug("Deleting temp file #{remote_temp_file} on remote system")
+        run_powershell_script("Remove-Item -confirm:$false #{remote_temp_file}")
+      end
+    end
 
     # Run a WQL Query
     # @see http://msdn.microsoft.com/en-us/library/aa394606(VS.85).aspx
@@ -352,7 +426,7 @@ module WinRM
       resp = send_message(builder.target!)
       parser = Nori.new(:parser => :rexml, :advanced_typecasting => false, :convert_tags_to => lambda { |tag| tag.snakecase.to_sym }, :strip_namespaces => true)
       hresp = parser.parse(resp.to_s)[:envelope][:body]
-      
+
       # Normalize items so the type always has an array even if it's just a single item.
       items = {}
       if hresp[:enumerate_response][:items]
@@ -423,7 +497,7 @@ module WinRM
     def send_message(message)
       @xfer.send_request(message)
     end
-    
+
 
     # Helper methods for SOAP Headers
 

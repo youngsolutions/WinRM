@@ -113,4 +113,33 @@ describe 'winrm client powershell', integration: true do
     it { should have_stdout_match(/4/) }
   end
 
+  describe 'run commands up to ~3000 chars length' do
+    cmd = '0' * 3048
+    subject(:output) { @winrm.powershell(cmd) }
+    it { should have_exit_code 0 }
+  end
+
+  describe 'fails if running commands longer than length limit' do
+    cmd = '0' * 3049
+    subject(:output) { @winrm.powershell(cmd) }
+    it { should have_exit_code 1 }
+  end
+
+  describe 'if using copy_and_run, we can circumvent this length limit' do
+    cmd = '0' * 4000
+    subject(:output) { @winrm.copy_and_run_powershell_script(cmd) }
+    it { should have_exit_code 0 }
+  end
+
+  describe 'capturing stdout, stderr and exit code when using copy_and_run' do
+    script = <<-eos
+    Write-Host 'Hello'
+    $host.ui.WriteErrorLine('Goodbye')
+    exit 10
+    eos
+    subject(:output) { @winrm.copy_and_run_powershell_script(script) }
+    it { should have_exit_code 10 }
+    it { should have_stdout_match /Hello/ }
+    it { should have_stderr_match /Goodbye/ }
+  end
 end
