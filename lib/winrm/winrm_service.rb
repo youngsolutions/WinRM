@@ -360,7 +360,10 @@ module WinRM
       remote_temp_file = output[:stdout].strip
       @logger.debug("Created temp file #{remote_temp_file} on remote system")
 
-      base64_script = Base64.encode64(script).gsub("\n", '')
+      # add BOM so that powershell recognizes the resulting file as UTF8
+      script_with_bom = "\xEF\xBB\xBF" + script
+
+      base64_script = Base64.encode64(script_with_bom).gsub("\n", '')
       begin
         # copy file in 2000 char chunks (since length limit applies here as well) to tempfile
         chunk_size = 2000
@@ -379,7 +382,7 @@ module WinRM
         end
 
         # compare md5sum between local and remote script
-        local_md5 = Digest::MD5.hexdigest(script)
+        local_md5 = Digest::MD5.hexdigest(script_with_bom)
         @logger.debug('Integrity check of remote file')
 
         compare_md5_cmd = <<-eos

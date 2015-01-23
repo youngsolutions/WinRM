@@ -167,4 +167,10 @@ describe 'winrm client powershell', integration: true do
     it { should have_exit_code 0 }
     it { should have_stdout_match /Hello/ }
   end
+
+  describe 'non-ascii encoding when copying' do
+    subject(:output) { @winrm.copy_and_run_powershell_script('echo "1234-äöü"') }
+    it { should have_exit_code 0 }
+    it { should have_stdout_match(/1234-äöü/) }
+  end
 end
