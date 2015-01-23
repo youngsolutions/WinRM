@@ -143,6 +143,19 @@ describe 'winrm client powershell', integration: true do
     it { should have_stderr_match /Goodbye/ }
   end
 
+  describe 'length limit, stdout, stderr & exitcode' do
+    script = <<-eos
+      #{'0' * 4000}
+      Write-Host 'Hello'
+      $host.ui.WriteErrorLine('Goodbye')
+      exit 10
+    eos
+    subject(:output) { @winrm.copy_and_run_powershell_script(script) }
+    it { should have_exit_code 10 }
+    it { should have_stdout_match /Hello/ }
+    it { should have_stderr_match /Goodbye/ }
+  end
+
   describe 'if a syntax error occurs, exit code is 1' do
     subject(:output) { @winrm.copy_and_run_powershell_script('echo "Hello World') }
     it { should have_exit_code 1 }
